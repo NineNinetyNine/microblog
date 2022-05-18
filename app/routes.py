@@ -7,34 +7,25 @@ from werkzeug.urls import url_parse
 from app import app, db
 from flask import render_template, flash, redirect, request
 from datetime import date, datetime
-from app.forms import EditProfileForm, LoginForm, RegistrationForm, EmptyForm
+from app.forms import EditProfileForm, LoginForm, RegistrationForm, EmptyForm, PostForm
 from flask_login import current_user, login_user, login_required, logout_user
-from app.models import User
+from app.models import User, Post
 
 
-@app.route('/')
-@app.route('/index')
+@app.route('/', methods=['GET', 'POST'])
+@app.route('/index', methods=['GET', 'POST'])
 @login_required
 def index():
+    form = PostForm()
+    if form.validate_on_submit():
+        post = Post(body=form.post.data, author=current_user)
+        db.session.add(post)
+        db.session.commit()
+        flash('Your post is now live!')
+        return redirect(url_for('index'))
     user = {'username': 'Max'}
-    posts = [
-        {
-            'author': {'username': 'John'},
-            'body': 'Bitcoin hits $100k',
-            'date': f'{date.today()}'
-        },
-        {
-            'author': {'username': 'Charles'},
-            'body': 'Ethereum to $20k EOY?',
-            'date': f'{date.today()}'
-        },
-        {
-            'author': {'username': 'Richard'},
-            'body': 'Bears are back in full force!',
-            'date': f'{date.today()}'
-        }
-    ]
-    return render_template('index.html', title='Home', posts=posts)
+    posts = current_user.followed_posts().all()
+    return render_template('index.html', title='Home', form=form, posts=posts)
 
 @app.route('/login', methods=['GET', 'POST'])
 def login():
@@ -67,6 +58,7 @@ def register():
     if form.validate_on_submit():
         user = User(username=form.username.data, email=form.email.data)
         user.set_password(form.password.data) 
+        db.session.add(user)
         db.session.commit()
         flash('Congratulations, you are now a registered user!')
         return redirect(url_for('login'))
@@ -140,3 +132,11 @@ def unfollow(username):
         return redirect(url_for('user', username=username))
     else:
         return redirect(url_for('index'))
+
+@app.route('/explore')
+@login_required
+def explore():
+    posts = Post.query.order_by(Post.timestamp.desc()).all()
+    return render_template('index.html', title='Explore', posts=posts)
+
+#GOT UP TO PAGINATION OF BLOG POSTS!
